@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Ricochet — a Breakout game</title>
+<style>
+  :root{
+    --ink:#1c1730;
+    --marquee:#2c2350;
+    --marquee-light:#3d3070;
+    --cream:#f4ecd8;
+    --coral:#ff6b5b;
+    --mustard:#f2b544;
+    --teal:#4fc6b0;
+    --violet:#9b7fd4;
+    --paddle:#f4ecd8;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0;
+    height:100%;
+    background:var(--ink);
+    font-family: 'Courier New', ui-monospace, monospace;
+    color:var(--cream);
+    overflow:hidden;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    min-height:100%;
+    padding:16px;
+  }
+
+  .cabinet{
+    background:var(--marquee);
+    border-radius:18px;
+    padding:18px 18px 22px;
+    box-shadow: 0 0 0 3px var(--marquee-light) inset, 0 20px 50px rgba(0,0,0,0.5);
+    max-width:640px;
+    width:100%;
+  }
+
+  .marquee{
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    padding:0 6px 14px;
+  }
+  .title{
+    font-size:26px;
+    font-weight:700;
+    letter-spacing:1px;
+    color:var(--mustard);
+    text-shadow: 2px 2px 0 var(--coral);
+    margin:0;
+  }
+  .stats{
+    display:flex;
+    gap:18px;
+    font-size:14px;
+    color:var(--cream);
+  }
+  .stats span b{
+    display:block;
+    font-size:18px;
+    color:var(--teal);
+  }
+
+  .screen-wrap{
+    position:relative;
+    border-radius:10px;
+    overflow:hidden;
+    background: radial-gradient(ellipse at 50% 0%, #241c3f 0%, #17122a 70%);
+    box-shadow: inset 0 0 0 2px rgba(244,236,216,0.15), inset 0 10px 30px rgba(0,0,0,0.5);
+  }
+
+  canvas{
+    display:block;
+    width:100%;
+    height:auto;
+    touch-action:none;
+  }
+
+  .overlay{
+    position:absolute;
+    inset:0;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    gap:14px;
+    background:rgba(23,18,42,0.86);
+    padding:20px;
+  }
+  .overlay h2{
+    margin:0;
+    font-size:24px;
+    color:var(--mustard);
+  }
+  .overlay p{
+    margin:0;
+    max-width:360px;
+    line-height:1.5;
+    color:var(--cream);
+    font-size:14px;
+    opacity:0.85;
+  }
+  .btn{
+    font-family:inherit;
+    font-size:15px;
+    font-weight:700;
+    letter-spacing:0.5px;
+    padding:10px 26px;
+    border-radius:999px;
+    border:none;
+    cursor:pointer;
+    background:var(--coral);
+    color:var(--ink);
+    box-shadow:0 4px 0 #b8443a;
+    transition:transform 0.08s ease;
+  }
+  .btn:active{
+    transform:translateY(3px);
+    box-shadow:0 1px 0 #b8443a;
+  }
+  .btn.secondary{
+    background:var(--teal);
+    box-shadow:0 4px 0 #2f8b78;
+  }
+  .btn.secondary:active{
+    box-shadow:0 1px 0 #2f8b78;
+  }
+
+  .footer-hint{
+    text-align:center;
+    font-size:12px;
+    color:var(--violet);
+    margin-top:12px;
+    letter-spacing:0.3px;
+  }
+
+  .save-row{
+    display:flex;
+    justify-content:center;
+    gap:10px;
+    margin-top:14px;
+  }
+  .btn-small{
+    font-family:inherit;
+    font-size:13px;
+    font-weight:700;
+    letter-spacing:0.3px;
+    padding:8px 18px;
+    border-radius:999px;
+    border:none;
+    cursor:pointer;
+    background:var(--marquee-light);
+    color:var(--cream);
+    box-shadow:0 3px 0 #201a3a;
+    transition:transform 0.08s ease;
+  }
+  .btn-small:active{
+    transform:translateY(2px);
+    box-shadow:0 1px 0 #201a3a;
+  }
+  .btn-small:hover{
+    background:var(--violet);
+    color:var(--ink);
+  }
+
+  .save-toast{
+    position:fixed;
+    bottom:20px;
+    left:50%;
+    transform:translateX(-50%) translateY(20px);
+    background:var(--teal);
+    color:var(--ink);
+    font-weight:700;
+    font-size:13px;
+    padding:10px 20px;
+    border-radius:999px;
+    opacity:0;
+    pointer-events:none;
+    transition:opacity 0.25s ease, transform 0.25s ease;
+    z-index:100;
+  }
+  .save-toast.show{
+    opacity:1;
+    transform:translateX(-50%) translateY(0);
+  }
+
+  .hidden{ display:none !important; }
+</style>
+</head>
+<body>
+
+<div class="cabinet">
+  <div class="marquee">
+    <p class="title">RICOCHET</p>
+    <div class="stats">
+      <span>Score<b id="score">0</b></span>
+      <span>Lives<b id="lives">3</b></span>
+    </div>
+  </div>
+
+  <div class="screen-wrap">
+    <canvas id="game" width="600" height="440"></canvas>
+
+    <div class="overlay" id="startOverlay">
+      <h2>Ready to play?</h2>
+      <p>Move the paddle with your mouse, arrow keys, A/D, or touch. Keep the ball off the floor and keep racking up points — a new wall of bricks appears whenever you clear one.</p>
+      <button class="btn" id="startBtn">Start Game</button>
+    </div>
+
+    <div class="overlay hidden" id="loseLifeOverlay">
+      <h2>Ball dropped!</h2>
+      <p id="livesLeftText">Lives remaining: 2</p>
+      <button class="btn" id="continueBtn">Serve Next Ball</button>
+    </div>
+
+    <div class="overlay hidden" id="gameOverOverlay">
+      <h2>Game Over</h2>
+      <p id="finalScoreText">Final score: 0</p>
+      <button class="btn" id="retryBtn">Play Again</button>
+    </div>
+
+  </div>
+
+  <p class="footer-hint">← → / A D / mouse / touch to move · space to launch</p>
+
+  <div class="save-row">
+    <button class="btn-small" id="exportBtn">Export Game</button>
+    <button class="btn-small" id="importBtn">Import Game</button>
+    <input type="file" id="importFile" accept=".ricochet" class="hidden">
+  </div>
+</div>
+
+<div class="save-toast" id="saveToast"></div>
+
+<script>
+(function(){
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+
+  const scoreEl = document.getElementById('score');
+  const livesEl = document.getElementById('lives');
+
+  const startOverlay = document.getElementById('startOverlay');
+  const loseLifeOverlay = document.getElementById('loseLifeOverlay');
+  const gameOverOverlay = document.getElementById('gameOverOverlay');
+  const livesLeftText = document.getElementById('livesLeftText');
+  const finalScoreText = document.getElementById('finalScoreText');
+
+  const BRICK_COLORS = ['#ff6b5b', '#f2b544', '#4fc6b0', '#9b7fd4', '#e8578a'];
+
+  let paddle, ball, bricks, score, lives, running, ballOnPaddle, animId;
+
+  const PADDLE_W = 90, PADDLE_H = 14;
+  const BALL_R = 7;
+  const BRICK_ROWS = 5;
+  const BRICK_COLS = 9;
+  const BRICK_W = 56, BRICK_H = 20, BRICK_GAP = 6, BRICK_TOP = 40, BRICK_LEFT = 10;
+  const BALL_SPEED = 3.6;
+
+  function buildBricks(){
+    const arr = [];
+    for(let r=0;r<BRICK_ROWS;r++){
+      for(let c=0;c<BRICK_COLS;c++){
+        const hp = ((r+c)%6===0) ? 2 : 1;
+        arr.push({
+          x: BRICK_LEFT + c*(BRICK_W+BRICK_GAP),
+          y: BRICK_TOP + r*(BRICK_H+BRICK_GAP),
+          w: BRICK_W, h: BRICK_H,
+          color: BRICK_COLORS[r % BRICK_COLORS.length],
+          alive: true,
+          hp: hp,
+          maxHp: hp
+        });
+      }
+    }
+    return arr;
+  }
+
+  function setupBoard(){
+    paddle = { x: W/2 - PADDLE_W/2, y: H - 30, w: PADDLE_W, h: PADDLE_H, speed: 7, dx: 0 };
+    ball = { x: W/2, y: paddle.y - BALL_R - 1, r: BALL_R, dx: BALL_SPEED, dy: -BALL_SPEED, speed: BALL_SPEED };
+    ballOnPaddle = true;
+    bricks = buildBricks();
+  }
+
+  function resetGame(){
+    score = 0; lives = 3;
+    updateHud();
+    setupBoard();
+  }
+
+  function updateHud(){
+    scoreEl.textContent = score;
+    livesEl.textContent = lives;
+  }
+
+  // Input handling
+  let leftDown=false, rightDown=false;
+  document.addEventListener('keydown', e=>{
+    if(e.key==='ArrowLeft'||e.key==='a'||e.key==='A') leftDown=true;
+    if(e.key==='ArrowRight'||e.key==='d'||e.key==='D') rightDown=true;
+    if(e.key===' '){ launchBall(); e.preventDefault(); }
+  });
+  document.addEventListener('keyup', e=>{
+    if(e.key==='ArrowLeft'||e.key==='a'||e.key==='A') leftDown=false;
+    if(e.key==='ArrowRight'||e.key==='d'||e.key==='D') rightDown=false;
+  });
+
+  function pointerToCanvasX(clientX){
+    const rect = canvas.getBoundingClientRect();
+    const scale = W / rect.width;
+    return (clientX - rect.left) * scale;
+  }
+
+  canvas.addEventListener('mousemove', e=>{
+    if(!running) return;
+    const mx = pointerToCanvasX(e.clientX);
+    movePaddleTo(mx);
+  });
+  canvas.addEventListener('touchmove', e=>{
+    if(!running) return;
+    const t = e.touches[0];
+    const mx = pointerToCanvasX(t.clientX);
+    movePaddleTo(mx);
+    e.preventDefault();
+  }, {passive:false});
+  canvas.addEventListener('touchstart', e=>{
+    launchBall();
+  });
+  canvas.addEventListener('click', ()=>{
+    launchBall();
+  });
+
+  function movePaddleTo(mx){
+    paddle.x = Math.max(0, Math.min(W - paddle.w, mx - paddle.w/2));
+  }
+
+  function launchBall(){
+    if(ballOnPaddle && running){
+      ballOnPaddle = false;
+    }
+  }
+
+  function rectCircleColliding(circle, rect){
+    const closestX = Math.max(rect.x, Math.min(circle.x, rect.x+rect.w));
+    const closestY = Math.max(rect.y, Math.min(circle.y, rect.y+rect.h));
+    const dx = circle.x - closestX, dy = circle.y - closestY;
+    return (dx*dx + dy*dy) < (circle.r*circle.r);
+  }
+
+  function update(){
+    // paddle keyboard movement
+    if(leftDown) paddle.dx = -paddle.speed;
+    else if(rightDown) paddle.dx = paddle.speed;
+    else paddle.dx = 0;
+    paddle.x = Math.max(0, Math.min(W - paddle.w, paddle.x + paddle.dx));
+
+    if(ballOnPaddle){
+      ball.x = paddle.x + paddle.w/2;
+      ball.y = paddle.y - ball.r - 1;
+      return;
+    }
+
+    ball.x += ball.dx;
+    ball.y += ball.dy;
+
+    // wall collisions
+    if(ball.x - ball.r < 0){ ball.x = ball.r; ball.dx *= -1; }
+    if(ball.x + ball.r > W){ ball.x = W - ball.r; ball.dx *= -1; }
+    if(ball.y - ball.r < 0){ ball.y = ball.r; ball.dy *= -1; }
+
+    // paddle collision
+    if(ball.dy > 0 && rectCircleColliding(ball, paddle)){
+      ball.y = paddle.y - ball.r;
+      const hitPos = (ball.x - (paddle.x + paddle.w/2)) / (paddle.w/2); // -1..1
+      const angle = hitPos * (Math.PI/3); // max 60 degrees
+      const speed = Math.hypot(ball.dx, ball.dy);
+      ball.dx = speed * Math.sin(angle);
+      ball.dy = -Math.abs(speed * Math.cos(angle));
+    }
+
+    // brick collisions
+    for(const b of bricks){
+      if(!b.alive) continue;
+      if(rectCircleColliding(ball, b)){
+        b.hp -= 1;
+        if(b.hp <= 0){
+          b.alive = false;
+          score += 10;
+        } else {
+          score += 5;
+        }
+        updateHud();
+
+        // determine bounce direction based on overlap
+        const overlapLeft = (ball.x + ball.r) - b.x;
+        const overlapRight = (b.x + b.w) - (ball.x - ball.r);
+        const overlapTop = (ball.y + ball.r) - b.y;
+        const overlapBottom = (b.y + b.h) - (ball.y - ball.r);
+        const minOverlap = Math.min(overlapLeft, overlapRight, overlapTop, overlapBottom);
+        if(minOverlap === overlapTop || minOverlap === overlapBottom){
+          ball.dy *= -1;
+        } else {
+          ball.dx *= -1;
+        }
+        break;
+      }
+    }
+
+    // ball falls below paddle
+    if(ball.y - ball.r > H){
+      lives -= 1;
+      updateHud();
+      if(lives <= 0){
+        endGame();
+      } else {
+        running = false;
+        livesLeftText.textContent = 'Lives remaining: ' + lives;
+        loseLifeOverlay.classList.remove('hidden');
+        resetBallAndPaddle();
+      }
+      return;
+    }
+
+    // all bricks cleared — refill the board and keep playing
+    if(bricks.every(b=>!b.alive)){
+      bricks = buildBricks();
+    }
+  }
+
+  function resetBallAndPaddle(){
+    paddle.x = W/2 - paddle.w/2;
+    ball.dx = ball.speed;
+    ball.dy = -ball.speed;
+    ballOnPaddle = true;
+  }
+
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+
+    // bricks
+    for(const b of bricks){
+      if(!b.alive) continue;
+      ctx.fillStyle = b.color;
+      roundRect(ctx, b.x, b.y, b.w, b.h, 4);
+      ctx.fill();
+      if(b.maxHp > 1){
+        ctx.fillStyle = 'rgba(0,0,0,0.25)';
+        const dmgWidth = b.w * (b.hp/b.maxHp);
+        ctx.fillRect(b.x, b.y + b.h - 4, b.w, 4);
+        ctx.fillStyle = 'rgba(255,255,255,0.5)';
+        ctx.fillRect(b.x, b.y + b.h - 4, dmgWidth, 4);
+      }
+    }
+
+    // paddle
+    ctx.fillStyle = '#f4ecd8';
+    roundRect(ctx, paddle.x, paddle.y, paddle.w, paddle.h, 7);
+    ctx.fill();
+
+    // ball
+    ctx.beginPath();
+    ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI*2);
+    ctx.fillStyle = '#ff6b5b';
+    ctx.fill();
+  }
+
+  function roundRect(ctx, x, y, w, h, r){
+    ctx.beginPath();
+    ctx.moveTo(x+r, y);
+    ctx.arcTo(x+w, y, x+w, y+h, r);
+    ctx.arcTo(x+w, y+h, x, y+h, r);
+    ctx.arcTo(x, y+h, x, y, r);
+    ctx.arcTo(x, y, x+w, y, r);
+    ctx.closePath();
+  }
+
+  function loop(){
+    if(running){
+      update();
+      draw();
+    }
+    animId = requestAnimationFrame(loop);
+  }
+
+  function endGame(){
+    running = false;
+    finalScoreText.textContent = 'Final score: ' + score;
+    gameOverOverlay.classList.remove('hidden');
+  }
+
+  // Button handlers
+  document.getElementById('startBtn').addEventListener('click', ()=>{
+    startOverlay.classList.add('hidden');
+    resetGame();
+    draw();
+    running = true;
+  });
+
+  document.getElementById('continueBtn').addEventListener('click', ()=>{
+    loseLifeOverlay.classList.add('hidden');
+    running = true;
+  });
+
+  document.getElementById('retryBtn').addEventListener('click', ()=>{
+    gameOverOverlay.classList.add('hidden');
+    resetGame();
+    draw();
+    running = true;
+  });
+
+  // ----- Export / Import -----
+  const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+  function formattedDateFilename(){
+    const d = new Date();
+    const month = MONTH_NAMES[d.getMonth()];
+    const day = String(d.getDate()).padStart(2,'0');
+    const year = d.getFullYear();
+    return month + '-' + day + '-' + year + '.ricochet';
+  }
+
+  let toastTimer = null;
+  function showToast(msg){
+    const t = document.getElementById('saveToast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(()=> t.classList.remove('show'), 2200);
+  }
+
+  function serializeGame(){
+    return {
+      format: 'ricochet-save',
+      version: 1,
+      savedAt: new Date().toISOString(),
+      score, lives,
+      paddle: { x: paddle.x, w: paddle.w },
+      ball: {
+        x: ball.x, y: ball.y,
+        dx: ball.dx, dy: ball.dy,
+        speed: ball.speed
+      },
+      ballOnPaddle,
+      bricks: bricks.map(b => ({
+        x: b.x, y: b.y, w: b.w, h: b.h,
+        color: b.color, alive: b.alive, hp: b.hp, maxHp: b.maxHp
+      }))
+    };
+  }
+
+  function exportGame(){
+    const wasRunning = running;
+    running = false; // pause while exporting
+    const data = serializeGame();
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type: 'application/octet-stream' });
+    const url = URL.createObjectURL(blob);
+    const filename = formattedDateFilename();
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    showToast('Saved as ' + filename);
+    running = wasRunning;
+  }
+
+  function loadGame(data){
+    if(!data || data.format !== 'ricochet-save'){
+      showToast('That file isn\'t a valid .ricochet save');
+      return;
+    }
+    // hide any overlays
+    startOverlay.classList.add('hidden');
+    loseLifeOverlay.classList.add('hidden');
+    gameOverOverlay.classList.add('hidden');
+
+    score = data.score;
+    lives = data.lives;
+    updateHud();
+
+    paddle.x = data.paddle.x;
+    paddle.w = data.paddle.w;
+
+    ball.x = data.ball.x;
+    ball.y = data.ball.y;
+    ball.dx = data.ball.dx;
+    ball.dy = data.ball.dy;
+    ball.speed = data.ball.speed;
+    ballOnPaddle = data.ballOnPaddle;
+
+    bricks = data.bricks.map(b => ({...b}));
+
+    draw();
+    running = true;
+    showToast('Game loaded — good luck!');
+  }
+
+  function importGame(file){
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try{
+        const data = JSON.parse(e.target.result);
+        loadGame(data);
+      } catch(err){
+        showToast('Couldn\'t read that save file');
+      }
+    };
+    reader.onerror = () => showToast('Couldn\'t read that save file');
+    reader.readAsText(file);
+  }
+
+  document.getElementById('exportBtn').addEventListener('click', exportGame);
+
+  document.getElementById('importBtn').addEventListener('click', () => {
+    document.getElementById('importFile').click();
+  });
+
+  document.getElementById('importFile').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if(file) importGame(file);
+    e.target.value = ''; // allow re-importing the same file later
+  });
+
+  // init
+  resetGame();
+  draw();
+  running = false;
+  loop();
+})();
+</script>
+
+</body>
+</html>
