@@ -14,16 +14,58 @@
     --teal:#4fc6b0;
     --violet:#9b7fd4;
     --paddle:#f4ecd8;
+
+    /* semantic theme tokens (dark mode = default) */
+    --page-bg: var(--ink);
+    --panel-bg: var(--marquee);
+    --panel-border: var(--marquee-light);
+    --text-primary: var(--cream);
+    --text-secondary: var(--violet);
+    --stat-accent: var(--teal);
+    --screen-bg-start: #241c3f;
+    --screen-bg-end: #17122a;
+    --screen-inset: rgba(244,236,216,0.15);
+    --overlay-bg: rgba(23,18,42,0.86);
+    --overlay-title: var(--mustard);
+    --overlay-text: var(--cream);
+    --chip-bg: var(--marquee-light);
+    --chip-text: var(--cream);
+    --chip-hover-bg: var(--violet);
+    --chip-hover-text: var(--ink);
+    --canvas-paddle: #f4ecd8;
+    --canvas-ball: #ff6b5b;
+  }
+
+  html[data-theme="light"]{
+    --page-bg: #fbf3e6;
+    --panel-bg: #fff8ec;
+    --panel-border: #f0dcbb;
+    --text-primary: #2c2350;
+    --text-secondary: #8a6fc4;
+    --stat-accent: #1f9c85;
+    --screen-bg-start: #fefaf2;
+    --screen-bg-end: #f3e6cd;
+    --screen-inset: rgba(44,35,80,0.12);
+    --overlay-bg: rgba(255,248,236,0.92);
+    --overlay-title: #d9852f;
+    --overlay-text: #2c2350;
+    --chip-bg: #f0dcbb;
+    --chip-text: #2c2350;
+    --chip-hover-bg: #9b7fd4;
+    --chip-hover-text: #fff8ec;
+    --canvas-paddle: #2c2350;
+    --canvas-ball: #e8578a;
   }
   *{box-sizing:border-box;}
   html,body{
     margin:0;
     height:100%;
-    background:var(--ink);
+    background:var(--page-bg);
     font-family: 'Courier New', ui-monospace, monospace;
-    color:var(--cream);
+    color:var(--text-primary);
     overflow:hidden;
     -webkit-tap-highlight-color: transparent;
+    transition: background 0.25s ease, color 0.25s ease;
   }
   body{
     display:flex;
@@ -35,12 +77,13 @@
   }
 
   .cabinet{
-    background:var(--marquee);
+    background:var(--panel-bg);
     border-radius:18px;
     padding:18px 18px 22px;
-    box-shadow: 0 0 0 3px var(--marquee-light) inset, 0 20px 50px rgba(0,0,0,0.5);
+    box-shadow: 0 0 0 3px var(--panel-border) inset, 0 20px 50px rgba(0,0,0,0.35);
     max-width:640px;
     width:100%;
+    transition: background 0.25s ease, box-shadow 0.25s ease;
   }
 
   .marquee{
@@ -48,6 +91,7 @@
     justify-content:space-between;
     align-items:baseline;
     padding:0 6px 14px;
+    gap:12px;
   }
   .title{
     font-size:26px;
@@ -57,24 +101,54 @@
     text-shadow: 2px 2px 0 var(--coral);
     margin:0;
   }
+  .marquee-right{
+    display:flex;
+    align-items:center;
+    gap:14px;
+  }
   .stats{
     display:flex;
     gap:18px;
     font-size:14px;
-    color:var(--cream);
+    color:var(--text-primary);
   }
   .stats span b{
     display:block;
     font-size:18px;
-    color:var(--teal);
+    color:var(--stat-accent);
+  }
+  .theme-toggle{
+    font-family:inherit;
+    font-size:16px;
+    line-height:1;
+    width:34px;
+    height:34px;
+    border-radius:50%;
+    border:2px solid var(--panel-border);
+    background:transparent;
+    color:var(--text-primary);
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    transition:transform 0.15s ease, background 0.2s ease;
+    flex-shrink:0;
+  }
+  .theme-toggle:hover{
+    background:var(--chip-hover-bg);
+    color:var(--chip-hover-text);
+  }
+  .theme-toggle:active{
+    transform:scale(0.9);
   }
 
   .screen-wrap{
     position:relative;
     border-radius:10px;
     overflow:hidden;
-    background: radial-gradient(ellipse at 50% 0%, #241c3f 0%, #17122a 70%);
-    box-shadow: inset 0 0 0 2px rgba(244,236,216,0.15), inset 0 10px 30px rgba(0,0,0,0.5);
+    background: radial-gradient(ellipse at 50% 0%, var(--screen-bg-start) 0%, var(--screen-bg-end) 70%);
+    box-shadow: inset 0 0 0 2px var(--screen-inset), inset 0 10px 30px rgba(0,0,0,0.25);
+    transition: background 0.25s ease;
   }
 
   canvas{
@@ -93,19 +167,20 @@
     justify-content:center;
     text-align:center;
     gap:14px;
-    background:rgba(23,18,42,0.86);
+    background:var(--overlay-bg);
     padding:20px;
+    transition: background 0.25s ease;
   }
   .overlay h2{
     margin:0;
     font-size:24px;
-    color:var(--mustard);
+    color:var(--overlay-title);
   }
   .overlay p{
     margin:0;
     max-width:360px;
     line-height:1.5;
-    color:var(--cream);
+    color:var(--overlay-text);
     font-size:14px;
     opacity:0.85;
   }
@@ -138,7 +213,7 @@
   .footer-hint{
     text-align:center;
     font-size:12px;
-    color:var(--violet);
+    color:var(--text-secondary);
     margin-top:12px;
     letter-spacing:0.3px;
   }
@@ -158,18 +233,18 @@
     border-radius:999px;
     border:none;
     cursor:pointer;
-    background:var(--marquee-light);
-    color:var(--cream);
-    box-shadow:0 3px 0 #201a3a;
-    transition:transform 0.08s ease;
+    background:var(--chip-bg);
+    color:var(--chip-text);
+    box-shadow:0 3px 0 rgba(0,0,0,0.25);
+    transition:transform 0.08s ease, background 0.2s ease, color 0.2s ease;
   }
   .btn-small:active{
     transform:translateY(2px);
-    box-shadow:0 1px 0 #201a3a;
+    box-shadow:0 1px 0 rgba(0,0,0,0.25);
   }
   .btn-small:hover{
-    background:var(--violet);
-    color:var(--ink);
+    background:var(--chip-hover-bg);
+    color:var(--chip-hover-text);
   }
 
   .save-toast{
@@ -201,9 +276,12 @@
 <div class="cabinet">
   <div class="marquee">
     <p class="title">RICOCHET</p>
-    <div class="stats">
-      <span>Score<b id="score">0</b></span>
-      <span>Lives<b id="lives">3</b></span>
+    <div class="marquee-right">
+      <div class="stats">
+        <span>Score<b id="score">0</b></span>
+        <span>Lives<b id="lives">3</b></span>
+      </div>
+      <button class="theme-toggle" id="themeToggle" title="Toggle light/dark mode" aria-label="Toggle light/dark mode">🌙</button>
     </div>
   </div>
 
@@ -256,7 +334,10 @@
   const livesLeftText = document.getElementById('livesLeftText');
   const finalScoreText = document.getElementById('finalScoreText');
 
-  const BRICK_COLORS = ['#ff6b5b', '#f2b544', '#4fc6b0', '#9b7fd4', '#e8578a'];
+  const BRICK_COLOR_THEMES = {
+    dark: ['#ff6b5b', '#f2b544', '#4fc6b0', '#9b7fd4', '#e8578a'],
+    light: ['#ff9f45', '#f4a261', '#e8752c', '#ffb877', '#d9720f']
+  };
 
   let paddle, ball, bricks, score, lives, running, ballOnPaddle, animId;
 
@@ -276,7 +357,7 @@
           x: BRICK_LEFT + c*(BRICK_W+BRICK_GAP),
           y: BRICK_TOP + r*(BRICK_H+BRICK_GAP),
           w: BRICK_W, h: BRICK_H,
-          color: BRICK_COLORS[r % BRICK_COLORS.length],
+          colorIndex: r % BRICK_COLOR_THEMES.dark.length,
           alive: true,
           hp: hp,
           maxHp: hp
@@ -449,9 +530,10 @@
     ctx.clearRect(0,0,W,H);
 
     // bricks
+    const brickPalette = BRICK_COLOR_THEMES[currentThemeName] || BRICK_COLOR_THEMES.dark;
     for(const b of bricks){
       if(!b.alive) continue;
-      ctx.fillStyle = b.color;
+      ctx.fillStyle = brickPalette[b.colorIndex % brickPalette.length];
       roundRect(ctx, b.x, b.y, b.w, b.h, 4);
       ctx.fill();
       if(b.maxHp > 1){
@@ -464,14 +546,14 @@
     }
 
     // paddle
-    ctx.fillStyle = '#f4ecd8';
+    ctx.fillStyle = currentTheme.paddle;
     roundRect(ctx, paddle.x, paddle.y, paddle.w, paddle.h, 7);
     ctx.fill();
 
     // ball
     ctx.beginPath();
     ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI*2);
-    ctx.fillStyle = '#ff6b5b';
+    ctx.fillStyle = currentTheme.ball;
     ctx.fill();
   }
 
@@ -544,6 +626,7 @@
       format: 'ricochet-save',
       version: 1,
       savedAt: new Date().toISOString(),
+      theme: currentThemeName,
       score, lives,
       paddle: { x: paddle.x, w: paddle.w },
       ball: {
@@ -554,7 +637,7 @@
       ballOnPaddle,
       bricks: bricks.map(b => ({
         x: b.x, y: b.y, w: b.w, h: b.h,
-        color: b.color, alive: b.alive, hp: b.hp, maxHp: b.maxHp
+        colorIndex: b.colorIndex, alive: b.alive, hp: b.hp, maxHp: b.maxHp
       }))
     };
   }
@@ -593,6 +676,10 @@
     score = data.score;
     lives = data.lives;
     updateHud();
+
+    if(data.theme && data.theme !== currentThemeName){
+      applyTheme(data.theme);
+    }
 
     paddle.x = data.paddle.x;
     paddle.w = data.paddle.w;
@@ -637,8 +724,30 @@
     e.target.value = ''; // allow re-importing the same file later
   });
 
+  // ----- Theme toggle -----
+  const THEMES = {
+    dark: { paddle: '#f4ecd8', ball: '#ff6b5b' },
+    light: { paddle: '#2c2350', ball: '#e8578a' }
+  };
+  let currentThemeName = 'dark';
+  let currentTheme = THEMES.dark;
+
+  function applyTheme(name){
+    currentThemeName = name;
+    currentTheme = THEMES[name];
+    document.documentElement.setAttribute('data-theme', name);
+    const btn = document.getElementById('themeToggle');
+    btn.textContent = name === 'light' ? '☀️' : '🌙';
+    draw();
+  }
+
+  document.getElementById('themeToggle').addEventListener('click', () => {
+    applyTheme(currentThemeName === 'dark' ? 'light' : 'dark');
+  });
+
   // init
   resetGame();
+  applyTheme('dark');
   draw();
   running = false;
   loop();
@@ -647,3 +756,4 @@
 
 </body>
 </html>
+
