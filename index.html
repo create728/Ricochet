@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Ricochet — a Breakout game</title>
 <style>
   :root{
@@ -63,7 +64,8 @@
     background:var(--page-bg);
     font-family: 'Courier New', ui-monospace, monospace;
     color:var(--text-primary);
-    overflow:hidden;
+    overflow-x:hidden;
+    overflow-y:auto;
     -webkit-tap-highlight-color: transparent;
     transition: background 0.25s ease, color 0.25s ease;
   }
@@ -71,7 +73,6 @@
     display:flex;
     flex-direction:column;
     align-items:center;
-    justify-content:center;
     min-height:100%;
     padding:16px;
   }
@@ -83,6 +84,7 @@
     box-shadow: 0 0 0 3px var(--panel-border) inset, 0 20px 50px rgba(0,0,0,0.35);
     max-width:640px;
     width:100%;
+    margin:auto 0;
     transition: background 0.25s ease, box-shadow 0.25s ease;
   }
 
@@ -313,7 +315,7 @@
   <div class="save-row">
     <button class="btn-small" id="exportBtn">Export Game</button>
     <button class="btn-small" id="importBtn">Import Game</button>
-    <input type="file" id="importFile" accept=".ricochet" class="hidden">
+    <input type="file" id="importFile" accept=".ricochet,.json" class="hidden">
   </div>
 </div>
 
@@ -345,7 +347,7 @@
   const BALL_R = 7;
   const BRICK_ROWS = 5;
   const BRICK_COLS = 9;
-  const BRICK_W = 56, BRICK_H = 20, BRICK_GAP = 6, BRICK_TOP = 40, BRICK_LEFT = 10;
+  const BRICK_W = 56, BRICK_H = 20, BRICK_GAP = 6, BRICK_TOP = 40, BRICK_LEFT = 24;
   const BALL_SPEED = 3.6;
 
   function buildBricks(){
@@ -396,6 +398,10 @@
     if(e.key==='ArrowLeft'||e.key==='a'||e.key==='A') leftDown=false;
     if(e.key==='ArrowRight'||e.key==='d'||e.key==='D') rightDown=false;
   });
+
+  function releaseKeys(){ leftDown = false; rightDown = false; }
+  window.addEventListener('blur', releaseKeys);
+  document.addEventListener('visibilitychange', releaseKeys);
 
   function pointerToCanvasX(clientX){
     const rect = canvas.getBoundingClientRect();
@@ -461,9 +467,11 @@
     if(ball.y - ball.r < 0){ ball.y = ball.r; ball.dy *= -1; }
 
     // paddle collision
-    if(ball.dy > 0 && rectCircleColliding(ball, paddle)){
+    // only bounce on top-face hits; a ball that slips past the paddle's edge keeps falling
+    if(ball.dy > 0 && ball.y < paddle.y + 2 && rectCircleColliding(ball, paddle)){
       ball.y = paddle.y - ball.r;
-      const hitPos = (ball.x - (paddle.x + paddle.w/2)) / (paddle.w/2); // -1..1
+      let hitPos = (ball.x - (paddle.x + paddle.w/2)) / (paddle.w/2); // -1..1
+      if(Math.abs(hitPos) < 0.05) hitPos = (Math.random() < 0.5 ? -1 : 1) * 0.08; // avoid dead-vertical loops
       const angle = hitPos * (Math.PI/3); // max 60 degrees
       const speed = Math.hypot(ball.dx, ball.dy);
       ball.dx = speed * Math.sin(angle);
@@ -483,17 +491,16 @@
         }
         updateHud();
 
-        // determine bounce direction based on overlap
-        const overlapLeft = (ball.x + ball.r) - b.x;
-        const overlapRight = (b.x + b.w) - (ball.x - ball.r);
-        const overlapTop = (ball.y + ball.r) - b.y;
-        const overlapBottom = (b.y + b.h) - (ball.y - ball.r);
-        const minOverlap = Math.min(overlapLeft, overlapRight, overlapTop, overlapBottom);
-        if(minOverlap === overlapTop || minOverlap === overlapBottom){
-          ball.dy *= -1;
-        } else {
-          ball.dx *= -1;
-        }
+        // resolve along the axis of least penetration and push the ball out
+        const oL = (ball.x + ball.r) - b.x;
+        const oR = (b.x + b.w) - (ball.x - ball.r);
+        const oT = (ball.y + ball.r) - b.y;
+        const oB = (b.y + b.h) - (ball.y - ball.r);
+        const m = Math.min(oL, oR, oT, oB);
+        if(m === oT){ ball.y = b.y - ball.r; if(ball.dy > 0) ball.dy = -ball.dy; }
+        else if(m === oB){ ball.y = b.y + b.h + ball.r; if(ball.dy < 0) ball.dy = -ball.dy; }
+        else if(m === oL){ ball.x = b.x - ball.r; if(ball.dx > 0) ball.dx = -ball.dx; }
+        else { ball.x = b.x + b.w + ball.r; if(ball.dx < 0) ball.dx = -ball.dx; }
         break;
       }
     }
@@ -516,6 +523,8 @@
     // all bricks cleared — refill the board and keep playing
     if(bricks.every(b=>!b.alive)){
       bricks = buildBricks();
+      resetBallAndPaddle();
+      showToast('Wall cleared — serve again!');
     }
   }
 
@@ -567,10 +576,25 @@
     ctx.closePath();
   }
 
-  function loop(){
+  // Fixed 60 Hz simulation so speed is identical on 60/120/144 Hz displays
+  const STEP_MS = 1000/60;
+  let lastT = 0, acc = 0;
+  function loop(t){
+    if(!lastT) lastT = t;
+    const elapsed = Math.min(t - lastT, 100);
+    lastT = t;
     if(running){
-      update();
+      acc += elapsed;
+      let steps = 0;
+      while(acc >= STEP_MS && steps < 5 && running){
+        update();
+        acc -= STEP_MS;
+        steps++;
+      }
+      if(steps >= 5) acc = 0;
       draw();
+    } else {
+      acc = 0;
     }
     animId = requestAnimationFrame(loop);
   }
@@ -604,12 +628,12 @@
   // ----- Export / Import -----
   const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
-  function formattedDateFilename(){
+  function formattedDateFilename(ext){
     const d = new Date();
     const month = MONTH_NAMES[d.getMonth()];
     const day = String(d.getDate()).padStart(2,'0');
     const year = d.getFullYear();
-    return month + '-' + day + '-' + year + '.ricochet';
+    return month + '-' + day + '-' + year + ext;
   }
 
   let toastTimer = null;
@@ -642,60 +666,110 @@
     };
   }
 
-  function exportGame(){
-    const wasRunning = running;
-    running = false; // pause while exporting
-    const data = serializeGame();
-    const json = JSON.stringify(data, null, 2);
+  // In a published artifact, saving goes through the viewer's "downloads" capability.
+  // As a plain .html file, it's a normal browser download.
+  let downloadsCap = null;
+  const inArtifactRuntime = !!(window.claude && typeof window.claude.use === 'function');
+
+  async function exportGame(){
+    if(lives <= 0){
+      showToast('Game is over — start a new game to save');
+      return;
+    }
+    const json = JSON.stringify(serializeGame(), null, 2);
+
+    if(downloadsCap){
+      const filename = formattedDateFilename('.ricochet.json');
+      try{
+        await downloadsCap.save({ filename, data: json });
+        showToast('Saved as ' + filename);
+      } catch(err){
+        if(err && err.code === 'declined') return;
+        showToast('Couldn\'t save the game');
+      }
+      return;
+    }
+
+    const filename = formattedDateFilename('.ricochet');
     const blob = new Blob([json], { type: 'application/octet-stream' });
     const url = URL.createObjectURL(blob);
-    const filename = formattedDateFilename();
-
     const a = document.createElement('a');
     a.href = url;
     a.download = filename;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
     showToast('Saved as ' + filename);
-    running = wasRunning;
+  }
+
+  function isNum(v){ return typeof v === 'number' && Number.isFinite(v); }
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+  // Validate and normalise a save; returns a clean state object or null.
+  function parseSave(data){
+    if(!data || data.format !== 'ricochet-save') return null;
+    if(!isNum(data.score) || !isNum(data.lives)) return null;
+    if(!data.paddle || !isNum(data.paddle.x) || !isNum(data.paddle.w)) return null;
+    if(!Array.isArray(data.bricks) || data.bricks.length === 0 || data.bricks.length > 200) return null;
+    const bricks = [];
+    for(const b of data.bricks){
+      if(!b || !isNum(b.x) || !isNum(b.y) || !isNum(b.w) || !isNum(b.h) || !isNum(b.hp)) return null;
+      const maxHp = isNum(b.maxHp) ? clamp(Math.round(b.maxHp), 1, 9) : 2;
+      bricks.push({
+        x: b.x, y: b.y, w: clamp(b.w, 4, W), h: clamp(b.h, 4, H),
+        colorIndex: isNum(b.colorIndex) ? Math.abs(Math.round(b.colorIndex)) : 0,
+        alive: !!b.alive,
+        hp: clamp(Math.round(b.hp), 1, maxHp),
+        maxHp: maxHp
+      });
+    }
+    const pw = clamp(data.paddle.w, 20, W);
+    return {
+      score: Math.max(0, Math.round(data.score)),
+      lives: clamp(Math.round(data.lives), 0, 99),
+      paddleW: pw,
+      paddleX: clamp(data.paddle.x, 0, W - pw),
+      theme: THEMES[data.theme] ? data.theme : null,
+      bricks
+    };
   }
 
   function loadGame(data){
-    if(!data || data.format !== 'ricochet-save'){
+    const st = parseSave(data);
+    if(!st){
       showToast('That file isn\'t a valid .ricochet save');
       return;
     }
-    // hide any overlays
+    if(st.lives <= 0){
+      showToast('That save was already game over');
+      return;
+    }
+
+    // everything validated — now apply
     startOverlay.classList.add('hidden');
     loseLifeOverlay.classList.add('hidden');
     gameOverOverlay.classList.add('hidden');
 
-    score = data.score;
-    lives = data.lives;
+    score = st.score;
+    lives = st.lives;
     updateHud();
+    if(st.theme && st.theme !== currentThemeName) applyTheme(st.theme);
 
-    if(data.theme && data.theme !== currentThemeName){
-      applyTheme(data.theme);
-    }
+    paddle.w = st.paddleW;
+    paddle.x = st.paddleX;
+    bricks = st.bricks;
+    if(bricks.every(b => !b.alive)) bricks = buildBricks();
 
-    paddle.x = data.paddle.x;
-    paddle.w = data.paddle.w;
-
-    ball.x = data.ball.x;
-    ball.y = data.ball.y;
-    ball.dx = data.ball.dx;
-    ball.dy = data.ball.dy;
-    ball.speed = data.ball.speed;
-    ballOnPaddle = data.ballOnPaddle;
-
-    bricks = data.bricks.map(b => ({...b}));
+    // always resume with the ball on the paddle so the player can get ready
+    resetBallAndPaddle();
+    paddle.x = st.paddleX;
+    ball.x = paddle.x + paddle.w/2;
+    ball.y = paddle.y - ball.r - 1;
 
     draw();
     running = true;
-    showToast('Game loaded — good luck!');
+    showToast('Game loaded — press space or click to launch');
   }
 
   function importGame(file){
@@ -745,12 +819,23 @@
     applyTheme(currentThemeName === 'dark' ? 'light' : 'dark');
   });
 
+  if(inArtifactRuntime){
+    const exportBtn = document.getElementById('exportBtn');
+    exportBtn.classList.add('hidden');
+    window.claude.use('downloads').then(d => {
+      if(d){
+        downloadsCap = d;
+        exportBtn.classList.remove('hidden');
+      }
+    }).catch(() => {});
+  }
+
   // init
   resetGame();
   applyTheme('dark');
   draw();
   running = false;
-  loop();
+  animId = requestAnimationFrame(loop);
 })();
 </script>
 
