@@ -14,7 +14,6 @@
     --mustard:#f2b544;
     --teal:#4fc6b0;
     --violet:#9b7fd4;
-    --paddle:#f4ecd8;
 
     /* semantic theme tokens (dark mode = default) */
     --page-bg: var(--ink);
@@ -35,6 +34,7 @@
     --chip-hover-text: var(--ink);
     --canvas-paddle: #f4ecd8;
     --canvas-ball: #ff6b5b;
+    --brick-0:#ff6b5b; --brick-1:#f2b544; --brick-2:#4fc6b0; --brick-3:#9b7fd4; --brick-4:#e8578a;
   }
 
   html[data-theme="light"]{
@@ -56,16 +56,14 @@
     --chip-hover-text: #fff8ec;
     --canvas-paddle: #2c2350;
     --canvas-ball: #e8578a;
+    --brick-0:#ff9f45; --brick-1:#f4a261; --brick-2:#e8752c; --brick-3:#ffb877; --brick-4:#d9720f;
   }
   *{box-sizing:border-box;}
   html,body{
     margin:0;
-    height:100%;
     background:var(--page-bg);
     font-family: 'Courier New', ui-monospace, monospace;
     color:var(--text-primary);
-    overflow-x:hidden;
-    overflow-y:auto;
     -webkit-tap-highlight-color: transparent;
     transition: background 0.25s ease, color 0.25s ease;
   }
@@ -73,8 +71,9 @@
     display:flex;
     flex-direction:column;
     align-items:center;
-    min-height:100%;
-    padding:16px;
+    min-height:100vh;
+    min-height:100dvh;
+    padding:max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
   }
 
   .cabinet{
@@ -92,6 +91,7 @@
     display:flex;
     justify-content:space-between;
     align-items:baseline;
+    flex-wrap:wrap;
     padding:0 6px 14px;
     gap:12px;
   }
@@ -110,7 +110,7 @@
   }
   .stats{
     display:flex;
-    gap:18px;
+    gap:14px;
     font-size:14px;
     color:var(--text-primary);
   }
@@ -157,6 +157,7 @@
     display:block;
     width:100%;
     height:auto;
+    aspect-ratio:600 / 440;
     touch-action:none;
   }
 
@@ -204,13 +205,6 @@
     transform:translateY(3px);
     box-shadow:0 1px 0 #b8443a;
   }
-  .btn.secondary{
-    background:var(--teal);
-    box-shadow:0 4px 0 #2f8b78;
-  }
-  .btn.secondary:active{
-    box-shadow:0 1px 0 #2f8b78;
-  }
 
   .footer-hint{
     text-align:center;
@@ -251,7 +245,7 @@
 
   .save-toast{
     position:fixed;
-    bottom:20px;
+    bottom:max(20px, env(safe-area-inset-bottom));
     left:50%;
     transform:translateX(-50%) translateY(20px);
     background:var(--teal);
@@ -270,6 +264,9 @@
     transform:translateX(-50%) translateY(0);
   }
 
+  .btn:focus-visible,.btn-small:focus-visible,.theme-toggle:focus-visible{ outline:3px solid var(--mustard); outline-offset:3px; }
+  @media (prefers-reduced-motion: reduce){ *{ transition:none !important; } }
+
   .hidden{ display:none !important; }
 </style>
 </head>
@@ -281,18 +278,21 @@
     <div class="marquee-right">
       <div class="stats">
         <span>Score<b id="score">0</b></span>
-        <span>Lives<b id="lives">3</b></span>
+        <span>Lives<b id="lives" aria-live="polite">3</b></span>
+        <span>Level<b id="level" aria-live="polite">1</b></span>
+        <span>Best<b id="best">0</b></span>
       </div>
+      <button class="theme-toggle" id="muteBtn" title="Toggle sound" aria-label="Toggle sound" aria-pressed="false">🔊</button>
       <button class="theme-toggle" id="themeToggle" title="Toggle light/dark mode" aria-label="Toggle light/dark mode">🌙</button>
     </div>
   </div>
 
   <div class="screen-wrap">
-    <canvas id="game" width="600" height="440"></canvas>
+    <canvas id="game" width="600" height="440" role="img" aria-label="Ricochet game board"></canvas>
 
     <div class="overlay" id="startOverlay">
       <h2>Ready to play?</h2>
-      <p>Move the paddle with your mouse, arrow keys, A/D, or touch. Keep the ball off the floor and keep racking up points — a new wall of bricks appears whenever you clear one.</p>
+      <p>Move the paddle with your mouse, arrow keys, A/D, or touch. Keep the ball off the floor and keep racking up points — clear a wall and the next one comes back faster. Press P to pause.</p>
       <button class="btn" id="startBtn">Start Game</button>
     </div>
 
@@ -300,6 +300,12 @@
       <h2>Ball dropped!</h2>
       <p id="livesLeftText">Lives remaining: 2</p>
       <button class="btn" id="continueBtn">Serve Next Ball</button>
+    </div>
+
+    <div class="overlay hidden" id="pauseOverlay">
+      <h2>Paused</h2>
+      <p>Press P or Esc to resume.</p>
+      <button class="btn" id="resumeBtn">Resume</button>
     </div>
 
     <div class="overlay hidden" id="gameOverOverlay">
@@ -310,16 +316,17 @@
 
   </div>
 
-  <p class="footer-hint">← → / A D / mouse / touch to move · space to launch</p>
+  <p class="footer-hint">← → / A D / mouse / touch to move · space or click to launch · P to pause</p>
 
   <div class="save-row">
+    <button class="btn-small" id="pauseBtn">Pause</button>
     <button class="btn-small" id="exportBtn">Export Game</button>
     <button class="btn-small" id="importBtn">Import Game</button>
     <input type="file" id="importFile" accept=".ricochet,.json" class="hidden">
   </div>
 </div>
 
-<div class="save-toast" id="saveToast"></div>
+<div class="save-toast" id="saveToast" role="status" aria-live="polite"></div>
 
 <script>
 (function(){
@@ -336,12 +343,51 @@
   const livesLeftText = document.getElementById('livesLeftText');
   const finalScoreText = document.getElementById('finalScoreText');
 
-  const BRICK_COLOR_THEMES = {
-    dark: ['#ff6b5b', '#f2b544', '#4fc6b0', '#9b7fd4', '#e8578a'],
-    light: ['#ff9f45', '#f4a261', '#e8752c', '#ffb877', '#d9720f']
-  };
+  const $ = id => document.getElementById(id);
+  const levelEl = $('level'), bestEl = $('best');
+  const pauseOverlay = $('pauseOverlay');
 
-  let paddle, ball, bricks, score, lives, running, ballOnPaddle, animId;
+  const store = {
+    get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } },
+    set(k,v){ try{ localStorage.setItem(k, v); }catch(e){} }
+  };
+  const reducedMotion = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const BRICK_COLORS = 5;
+
+  let paddle, ball, bricks, score, lives, ballOnPaddle, animId;
+  let level = 1, best = parseInt(store.get('ricochet-best'), 10) || 0;
+  let running = false, muted = store.get('ricochet-muted') === '1';
+  let particles = [];
+
+  // ----- tiny WebAudio blips -----
+  let actx = null;
+  function ensureAudio(){
+    if(actx || muted) return;
+    try{ actx = new (window.AudioContext || window.webkitAudioContext)(); }catch(e){}
+  }
+  function beep(freq, dur){
+    if(muted || !actx) return;
+    if(actx.state === 'suspended') actx.resume();
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.type = 'square'; o.frequency.value = freq;
+    g.gain.setValueAtTime(0.04, actx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + dur);
+    o.connect(g); g.connect(actx.destination);
+    o.start(); o.stop(actx.currentTime + dur);
+  }
+
+  // ----- brick-break particles -----
+  function burst(x, y, color){
+    if(reducedMotion) return;
+    for(let i=0;i<8;i++){
+      const a = Math.random()*Math.PI*2, sp = 0.8 + Math.random()*2;
+      particles.push({ x, y, dx:Math.cos(a)*sp, dy:Math.sin(a)*sp, life:24, color });
+    }
+  }
+  function stepParticles(){
+    for(const p of particles){ p.x += p.dx; p.y += p.dy; p.dy += 0.08; p.life--; }
+    particles = particles.filter(p => p.life > 0);
+  }
 
   const PADDLE_W = 90, PADDLE_H = 14;
   const BALL_R = 7;
@@ -354,12 +400,12 @@
     const arr = [];
     for(let r=0;r<BRICK_ROWS;r++){
       for(let c=0;c<BRICK_COLS;c++){
-        const hp = (Math.random() < 1/6) ? 2 : 1;
+        const hp = (Math.random() < Math.min(0.5, 1/6 + (level-1)*0.05)) ? 2 : 1;
         arr.push({
           x: BRICK_LEFT + c*(BRICK_W+BRICK_GAP),
           y: BRICK_TOP + r*(BRICK_H+BRICK_GAP),
           w: BRICK_W, h: BRICK_H,
-          colorIndex: r % BRICK_COLOR_THEMES.dark.length,
+          colorIndex: r % BRICK_COLORS,
           alive: true,
           hp: hp,
           maxHp: hp
@@ -369,30 +415,38 @@
     return arr;
   }
 
+  function levelSpeed(){ return Math.min(BALL_SPEED * 1.8, BALL_SPEED * (1 + 0.08*(level-1))); }
+
   function setupBoard(){
     paddle = { x: W/2 - PADDLE_W/2, y: H - 30, w: PADDLE_W, h: PADDLE_H, speed: 7, dx: 0 };
-    ball = { x: W/2, y: paddle.y - BALL_R - 1, r: BALL_R, dx: BALL_SPEED, dy: -BALL_SPEED, speed: BALL_SPEED };
-    ballOnPaddle = true;
+    ball = { x: W/2, y: 0, r: BALL_R, dx: 0, dy: 0, speed: levelSpeed() };
     bricks = buildBricks();
+    resetBallAndPaddle();
   }
 
   function resetGame(){
-    score = 0; lives = 3;
-    updateHud();
+    score = 0; lives = 3; level = 1; particles = [];
     setupBoard();
+    updateHud();
   }
 
   function updateHud(){
+    if(score > best){ best = score; store.set('ricochet-best', String(best)); }
     scoreEl.textContent = score;
     livesEl.textContent = lives;
+    levelEl.textContent = level;
+    bestEl.textContent = best;
   }
 
   // Input handling
   let leftDown=false, rightDown=false;
   document.addEventListener('keydown', e=>{
-    if(e.key==='ArrowLeft'||e.key==='a'||e.key==='A') leftDown=true;
-    if(e.key==='ArrowRight'||e.key==='d'||e.key==='D') rightDown=true;
-    if(e.key===' '){ launchBall(); e.preventDefault(); }
+    const k = e.key;
+    if(k==='ArrowLeft'||k==='a'||k==='A') leftDown=true;
+    if(k==='ArrowRight'||k==='d'||k==='D') rightDown=true;
+    const onButton = e.target instanceof HTMLButtonElement;
+    if(k===' ' && !onButton){ launchBall(); e.preventDefault(); }
+    if((k==='p'||k==='P'||k==='Escape') && !e.repeat) togglePause();
   });
   document.addEventListener('keyup', e=>{
     if(e.key==='ArrowLeft'||e.key==='a'||e.key==='A') leftDown=false;
@@ -400,8 +454,30 @@
   });
 
   function releaseKeys(){ leftDown = false; rightDown = false; }
-  window.addEventListener('blur', releaseKeys);
-  document.addEventListener('visibilitychange', releaseKeys);
+
+  // pause / resume (also auto-pauses when the tab or window loses focus)
+  function pauseGame(){
+    if(!running) return;
+    running = false;
+    releaseKeys();
+    pauseOverlay.classList.remove('hidden');
+    $('resumeBtn').focus({preventScroll:true});
+  }
+  function resumeGame(){
+    pauseOverlay.classList.add('hidden');
+    running = true;
+  }
+  function togglePause(){
+    if(!pauseOverlay.classList.contains('hidden')) resumeGame(); else pauseGame();
+  }
+  window.addEventListener('blur', ()=>{ releaseKeys(); pauseGame(); });
+  document.addEventListener('visibilitychange', ()=>{ releaseKeys(); if(document.hidden) pauseGame(); });
+
+  // after a mouse/touch click, drop button focus so Space launches the ball again
+  document.addEventListener('click', e=>{
+    const b = e.target.closest && e.target.closest('button');
+    if(b && e.detail > 0) b.blur();
+  });
 
   function pointerToCanvasX(clientX){
     const rect = canvas.getBoundingClientRect();
@@ -409,22 +485,13 @@
     return (clientX - rect.left) * scale;
   }
 
-  canvas.addEventListener('mousemove', e=>{
-    if(!running) return;
-    const mx = pointerToCanvasX(e.clientX);
-    movePaddleTo(mx);
+  // one code path for mouse, touch and pen
+  canvas.addEventListener('pointermove', e=>{
+    if(running) movePaddleTo(pointerToCanvasX(e.clientX));
   });
-  canvas.addEventListener('touchmove', e=>{
+  canvas.addEventListener('pointerdown', e=>{
     if(!running) return;
-    const t = e.touches[0];
-    const mx = pointerToCanvasX(t.clientX);
-    movePaddleTo(mx);
-    e.preventDefault();
-  }, {passive:false});
-  canvas.addEventListener('touchstart', e=>{
-    launchBall();
-  });
-  canvas.addEventListener('click', ()=>{
+    movePaddleTo(pointerToCanvasX(e.clientX));
     launchBall();
   });
 
@@ -446,6 +513,7 @@
   }
 
   function update(){
+    stepParticles();
     // paddle keyboard movement
     if(leftDown) paddle.dx = -paddle.speed;
     else if(rightDown) paddle.dx = paddle.speed;
@@ -470,12 +538,13 @@
     // only bounce on top-face hits; a ball that slips past the paddle's edge keeps falling
     if(ball.dy > 0 && ball.y < paddle.y + 2 && rectCircleColliding(ball, paddle)){
       ball.y = paddle.y - ball.r;
-      let hitPos = (ball.x - (paddle.x + paddle.w/2)) / (paddle.w/2); // -1..1
+      let hitPos = Math.max(-1, Math.min(1, (ball.x - (paddle.x + paddle.w/2)) / (paddle.w/2))); // -1..1
       if(Math.abs(hitPos) < 0.05) hitPos = (Math.random() < 0.5 ? -1 : 1) * 0.08; // avoid dead-vertical loops
       const angle = hitPos * (Math.PI/3); // max 60 degrees
       const speed = Math.hypot(ball.dx, ball.dy);
       ball.dx = speed * Math.sin(angle);
       ball.dy = -Math.abs(speed * Math.cos(angle));
+      beep(300, 0.05);
     }
 
     // brick collisions
@@ -486,8 +555,11 @@
         if(b.hp <= 0){
           b.alive = false;
           score += 10;
+          burst(b.x + b.w/2, b.y + b.h/2, currentTheme.bricks[b.colorIndex % BRICK_COLORS]);
+          beep(660, 0.05);
         } else {
           score += 5;
+          beep(440, 0.05);
         }
         updateHud();
 
@@ -508,6 +580,7 @@
     // ball falls below paddle
     if(ball.y - ball.r > H){
       lives -= 1;
+      beep(140, 0.3);
       updateHud();
       if(lives <= 0){
         endGame();
@@ -516,30 +589,42 @@
         livesLeftText.textContent = 'Lives remaining: ' + lives;
         loseLifeOverlay.classList.remove('hidden');
         resetBallAndPaddle();
+        $('continueBtn').focus({preventScroll:true});
       }
       return;
     }
 
     // all bricks cleared — refill the board and keep playing
     if(bricks.every(b=>!b.alive)){
+      score += 100;
+      level += 1;
+      updateHud();
       bricks = buildBricks();
       resetBallAndPaddle();
-      showToast('Wall cleared — serve again!');
+      beep(880, 0.25);
+      showToast('Level ' + level + ' — +100 bonus, serve again!');
     }
   }
 
   function resetBallAndPaddle(){
     paddle.x = W/2 - paddle.w/2;
-    ball.dx = ball.speed;
-    ball.dy = -ball.speed;
+    ball.speed = levelSpeed();
+    // random serve angle, 20-40 degrees off vertical, either side
+    const a = (Math.random() < 0.5 ? -1 : 1) * (Math.PI/9 + Math.random()*Math.PI/9);
+    ball.dx = ball.speed * Math.sin(a);
+    ball.dy = -ball.speed * Math.cos(a);
     ballOnPaddle = true;
+    ball.x = paddle.x + paddle.w/2;
+    ball.y = paddle.y - ball.r - 1;
+    draw();
   }
 
   function draw(){
+    if(!currentTheme || !bricks) return;
     ctx.clearRect(0,0,W,H);
 
     // bricks
-    const brickPalette = BRICK_COLOR_THEMES[currentThemeName] || BRICK_COLOR_THEMES.dark;
+    const brickPalette = currentTheme.bricks;
     for(const b of bricks){
       if(!b.alive) continue;
       ctx.fillStyle = brickPalette[b.colorIndex % brickPalette.length];
@@ -564,6 +649,14 @@
     ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI*2);
     ctx.fillStyle = currentTheme.ball;
     ctx.fill();
+
+    // particles
+    for(const p of particles){
+      ctx.globalAlpha = Math.max(0, p.life/24);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(p.x-1.5, p.y-1.5, 3, 3);
+    }
+    ctx.globalAlpha = 1;
   }
 
   function roundRect(ctx, x, y, w, h, r){
@@ -603,6 +696,7 @@
     running = false;
     finalScoreText.textContent = 'Final score: ' + score;
     gameOverOverlay.classList.remove('hidden');
+    $('retryBtn').focus({preventScroll:true});
   }
 
   // Button handlers
@@ -651,14 +745,8 @@
       version: 1,
       savedAt: new Date().toISOString(),
       theme: currentThemeName,
-      score, lives,
+      score, lives, level,
       paddle: { x: paddle.x, w: paddle.w },
-      ball: {
-        x: ball.x, y: ball.y,
-        dx: ball.dx, dy: ball.dy,
-        speed: ball.speed
-      },
-      ballOnPaddle,
       bricks: bricks.map(b => ({
         x: b.x, y: b.y, w: b.w, h: b.h,
         colorIndex: b.colorIndex, alive: b.alive, hp: b.hp, maxHp: b.maxHp
@@ -715,6 +803,8 @@
     const bricks = [];
     for(const b of data.bricks){
       if(!b || !isNum(b.x) || !isNum(b.y) || !isNum(b.w) || !isNum(b.h) || !isNum(b.hp)) return null;
+      // keep bricks inside the play area (and clear of the paddle) so a wall is always clearable
+      if(b.w < 4 || b.w > 120 || b.h < 4 || b.h > 60 || b.x < 0 || b.x + b.w > W || b.y < 0 || b.y + b.h > H - 120) return null;
       const maxHp = isNum(b.maxHp) ? clamp(Math.round(b.maxHp), 1, 9) : 2;
       bricks.push({
         x: b.x, y: b.y, w: clamp(b.w, 4, W), h: clamp(b.h, 4, H),
@@ -730,7 +820,8 @@
       lives: clamp(Math.round(data.lives), 0, 99),
       paddleW: pw,
       paddleX: clamp(data.paddle.x, 0, W - pw),
-      theme: THEMES[data.theme] ? data.theme : null,
+      level: isNum(data.level) ? clamp(Math.round(data.level), 1, 50) : 1,
+      theme: (data.theme === 'dark' || data.theme === 'light') ? data.theme : null,
       bricks
     };
   }
@@ -750,9 +841,11 @@
     startOverlay.classList.add('hidden');
     loseLifeOverlay.classList.add('hidden');
     gameOverOverlay.classList.add('hidden');
+    pauseOverlay.classList.add('hidden');
 
     score = st.score;
     lives = st.lives;
+    level = st.level;
     updateHud();
     if(st.theme && st.theme !== currentThemeName) applyTheme(st.theme);
 
@@ -798,26 +891,45 @@
     e.target.value = ''; // allow re-importing the same file later
   });
 
-  // ----- Theme toggle -----
-  const THEMES = {
-    dark: { paddle: '#f4ecd8', ball: '#ff6b5b' },
-    light: { paddle: '#2c2350', ball: '#e8578a' }
-  };
+  // ----- Theme + sound toggles -----
   let currentThemeName = 'dark';
-  let currentTheme = THEMES.dark;
+  let currentTheme = null;
 
-  function applyTheme(name){
+  // colors come from the CSS variables, so CSS is the single source of truth
+  function setTheme(name){
     currentThemeName = name;
-    currentTheme = THEMES[name];
     document.documentElement.setAttribute('data-theme', name);
-    const btn = document.getElementById('themeToggle');
-    btn.textContent = name === 'light' ? '☀️' : '🌙';
-    draw();
+    const cs = getComputedStyle(document.documentElement);
+    const v = n => cs.getPropertyValue(n).trim();
+    currentTheme = {
+      paddle: v('--canvas-paddle'),
+      ball: v('--canvas-ball'),
+      bricks: [0,1,2,3,4].map(i => v('--brick-' + i))
+    };
+    $('themeToggle').textContent = name === 'light' ? '☀️' : '🌙';
   }
+  function applyTheme(name){ setTheme(name); draw(); }
 
-  document.getElementById('themeToggle').addEventListener('click', () => {
-    applyTheme(currentThemeName === 'dark' ? 'light' : 'dark');
+  $('themeToggle').addEventListener('click', () => {
+    const next = currentThemeName === 'dark' ? 'light' : 'dark';
+    store.set('ricochet-theme', next);
+    applyTheme(next);
   });
+
+  function syncMute(){
+    $('muteBtn').textContent = muted ? '🔇' : '🔊';
+    $('muteBtn').setAttribute('aria-pressed', String(muted));
+  }
+  $('muteBtn').addEventListener('click', () => {
+    muted = !muted;
+    store.set('ricochet-muted', muted ? '1' : '0');
+    ensureAudio();
+    syncMute();
+  });
+  ['pointerdown','keydown'].forEach(t => document.addEventListener(t, ensureAudio, {passive:true}));
+
+  $('pauseBtn').addEventListener('click', pauseGame);
+  $('resumeBtn').addEventListener('click', resumeGame);
 
   if(inArtifactRuntime){
     const exportBtn = document.getElementById('exportBtn');
@@ -830,13 +942,39 @@
     }).catch(() => {});
   }
 
+  // crisp rendering on high-DPI screens: backing store matches CSS size x devicePixelRatio
+  function fitCanvas(){
+    const cssW = canvas.clientWidth;
+    if(!cssW) return;
+    const k = (window.devicePixelRatio || 1) * cssW / W;
+    const pw = Math.round(W*k), ph = Math.round(H*k);
+    if(canvas.width !== pw || canvas.height !== ph){ canvas.width = pw; canvas.height = ph; }
+    ctx.setTransform(pw/W, 0, 0, ph/H, 0, 0);
+  }
+  if(typeof ResizeObserver !== 'undefined'){
+    new ResizeObserver(() => { fitCanvas(); draw(); }).observe(canvas);
+  } else {
+    window.addEventListener('resize', () => { fitCanvas(); draw(); });
+  }
+
   // init
+  fitCanvas();
+  const savedTheme = store.get('ricochet-theme');
+  setTheme(savedTheme === 'light' || savedTheme === 'dark'
+    ? savedTheme
+    : (window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'));
+  syncMute();
   resetGame();
-  applyTheme('dark');
-  draw();
   running = false;
   animId = requestAnimationFrame(loop);
+  $('startBtn').focus({preventScroll:true});
 })();
+</script>
+
+</body>
+</html>
+
+
 </script>
 
 </body>
